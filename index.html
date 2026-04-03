@@ -220,7 +220,8 @@ function applyHelpTips(){
   });
   d3.selectAll('.row').each(function(){
     const row=d3.select(this);
-    const label=(row.select('label').text()||'').replace(/\s+/g,' ').trim();
+    const labelNode=row.select('label').node();
+    const label=((labelNode?.textContent)||'').replace(/\s+/g,' ').trim();
     if(!label) return;
     row.selectAll('input,select').each(function(){
       const control=d3.select(this);
@@ -376,7 +377,7 @@ function finishMarquee(){const a=S.drag.start,b=S.drag.cur; const mx=Math.min(a.
 
 function addPrimitive(k){saveHistory(); const st={id:nid(),layer:'final',fill:'#000',stroke:'#000',strokeWidth:+d3.select('#strokePreset').property('value'),opacity:1,rot:0,visible:true,locked:false,rx:+d3.select('#cornerPreset').property('value')};
   if(k==='head') Object.assign(st,{type:'head',x:16,y:4,w:8,h:8});
-  if(k==='limb') Object.assign(st,{type:'limb',x1:12,y:20,x2:28,y2:20,fill:'none',stroke:'#000',strokeWidth:2});
+  if(k==='limb') Object.assign(st,{type:'limb',x1:12,y1:20,x2:28,y2:20,fill:'none',stroke:'#000',strokeWidth:2});
   if(k==='torso') Object.assign(st,{type:'torso',x:14,y:12,w:12,h:14,rx:1});
   if(k==='door') Object.assign(st,{type:'door',x:12,y:8,w:16,h:24,rx:0.5});
   if(k==='arrow') Object.assign(st,{type:'arrow',points:[[8,20],[24,20],[24,16],[32,22],[24,28],[24,24],[8,24]],closed:true,stroke:'none'});
