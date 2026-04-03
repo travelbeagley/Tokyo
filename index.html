@@ -168,11 +168,17 @@ function pt(ev){const p=d3.pointer(ev,svg.node()); const inv=d3.zoomTransform(sv
 function setMsg(m){S.msg=m;updateStatus();}
 function updateStatus(c){const p=c||{x:'-',y:'-'}; d3.select('#statusLeft').text(S.msg); d3.select('#statusRight').text(`(${p.x},${p.y}) · snap ${S.snap||'off'} · ${S.tool}`);}
 function updateHelpButton(){d3.select('#helpModeBtn').classed('active',S.helpMode).text(`Help: ${S.helpMode?'On':'Off'}`);}
-function setHelpMode(on){S.helpMode=!!on; if(S.helpMode) setMsg('Help mode enabled. Hover controls to see tips.'); else setMsg('Ready'); updateHelpButton();}
+function setHelpMode(on){
+  S.helpMode=!!on;
+  if(S.helpMode) setMsg('Help mode enabled. Hover controls to see tips.');
+  else setMsg('Ready');
+  updateHelpButton();
+}
 function attachHelpTip(sel,text){
+  if(!text) return;
   sel.attr('title',text)
-    .on('mouseenter.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text('Tip: '+text);})
-    .on('mouseleave.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text(S.msg);});
+    .on('mouseenter.help focus.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text('Tip: '+text);})
+    .on('mouseleave.help blur.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text(S.msg);});
 }
 function applyHelpTips(){
   const sectionTips={
@@ -211,6 +217,17 @@ function applyHelpTips(){
       'Help: On':'Toggle contextual hover tips on sections and buttons.'
     };
     attachHelpTip(btn,tipMap[label]||fallback);
+  });
+  d3.selectAll('.row').each(function(){
+    const row=d3.select(this);
+    const label=(row.select('label').text()||'').replace(/\s+/g,' ').trim();
+    if(!label) return;
+    row.selectAll('input,select').each(function(){
+      const control=d3.select(this);
+      if(control.attr('type')==='file') return;
+      const fallback=`Adjust "${label}" in the current panel.`;
+      attachHelpTip(control,fallback);
+    });
   });
 }
 
