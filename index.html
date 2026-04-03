@@ -50,6 +50,7 @@
     <button class="btn" id="copySvgBtn">Copy SVG</button>
     <button class="btn" id="exportPngBtn">Export PNG</button>
     <button class="btn" id="resetViewBtn">Reset View</button>
+    <button class="btn" id="helpModeBtn">Help: Off</button>
     <span style="margin-left:auto"></span>
     <button class="btn" id="modeEdit">Edit</button>
     <button class="btn" id="modeFinal">Final Preview</button>
@@ -141,6 +142,7 @@ const toolDefs=[['select','V'],['rectangle','R'],['roundRect','U'],['ellipse','O
 const primDefs=[['head','Head'],['limb','Limb'],['torso','Torso'],['door','Door'],['arrow','Arrow'],['step','Step']];
 const S={
   tool:'select',snap:1,angleLock:false,symmetry:false,mirrorDup:false,
+  helpMode:false,
   guides:{grid:true,circle:false,center:true,diag:false,margin:false,proportion:false},
   layers:C.layers.map((n,i)=>({id:n,visible:true,locked:n==='guides',order:i})),
   shapes:[],sel:[],hover:null,drag:null,mode:'edit',clipboard:[],
@@ -165,6 +167,52 @@ function snap(v){if(!S.snap) return +v; const m=Number(S.snap); return Math.roun
 function pt(ev){const p=d3.pointer(ev,svg.node()); const inv=d3.zoomTransform(svg.node()).invert(p); return {x:snap(inv[0]),y:snap(inv[1]),rx:inv[0],ry:inv[1]};}
 function setMsg(m){S.msg=m;updateStatus();}
 function updateStatus(c){const p=c||{x:'-',y:'-'}; d3.select('#statusLeft').text(S.msg); d3.select('#statusRight').text(`(${p.x},${p.y}) · snap ${S.snap||'off'} · ${S.tool}`);}
+function updateHelpButton(){d3.select('#helpModeBtn').classed('active',S.helpMode).text(`Help: ${S.helpMode?'On':'Off'}`);}
+function setHelpMode(on){S.helpMode=!!on; if(S.helpMode) setMsg('Help mode enabled. Hover controls to see tips.'); else setMsg('Ready'); updateHelpButton();}
+function attachHelpTip(sel,text){
+  sel.attr('title',text)
+    .on('mouseenter.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text('Tip: '+text);})
+    .on('mouseleave.help',()=>{if(!S.helpMode) return; d3.select('#statusLeft').text(S.msg);});
+}
+function applyHelpTips(){
+  const sectionTips={
+    'Tools':'Pick a drawing tool, then click or drag on the canvas.',
+    'Primitives':'Insert starter shapes you can quickly edit.',
+    'Grid & Guides':'Toggle layout guides to keep icons balanced.',
+    'Snap':'Control snapping, angle lock, and mirroring behavior.',
+    'Layers':'Show, hide, or lock drawing layers.',
+    'Reference Image':'Load and align an image for tracing.',
+    'Inspector':'Edit selected shape properties precisely.',
+    'Construction Aids':'Keep stroke and complexity consistent.',
+    'Edit':'Arrange, align, flip, duplicate, and delete selections.'
+  };
+  d3.selectAll('.sec h4').each(function(){
+    const heading=(this.textContent||'').trim();
+    if(sectionTips[heading]) attachHelpTip(d3.select(this),sectionTips[heading]);
+  });
+  d3.selectAll('button.btn').each(function(){
+    const btn=d3.select(this);
+    const label=(this.textContent||'').trim();
+    const fallback=label?`Use "${label}" to run this action.`:'Run this action.';
+    const tipMap={
+      'New':'Start a blank project (you will be asked to confirm).',
+      'Save JSON':'Download project data for later editing.',
+      'Load JSON':'Load a previously saved project file.',
+      'Export SVG':'Export the clean vector output.',
+      'Copy SVG':'Copy current SVG markup to your clipboard.',
+      'Export PNG':'Render and export a 1200×1200 PNG image.',
+      'Reset View':'Reset zoom and pan to the default view.',
+      'Edit':'Work with guides, reference image, and editable layers.',
+      'Final Preview':'Preview final icon output with editing aids hidden.',
+      'Inverse':'Preview icon in white on a dark background.',
+      'Small':'Preview the icon at reduced display size.',
+      'Silhouette':'Preview as solid fill without strokes.',
+      'Help: Off':'Toggle contextual hover tips on sections and buttons.',
+      'Help: On':'Toggle contextual hover tips on sections and buttons.'
+    };
+    attachHelpTip(btn,tipMap[label]||fallback);
+  });
+}
 
 function renderGuides(){gGuides.selectAll('*').remove();
   gGuides.append('rect').attr('x',0).attr('y',0).attr('width',40).attr('height',40).attr('fill','none').attr('stroke','#222').attr('stroke-width',0.12).attr('class','guide');
@@ -268,7 +316,7 @@ function renderWarnings(){if(!d3.select('#warnBounds').property('checked')&&!d3.
 function renderComplexity(){let c=0; S.shapes.forEach(s=>{if(s.points) c+=s.points.length; if(['path','curve','arc'].includes(s.type)) c+=2;}); d3.select('#complexity').text('Complexity: '+c);} 
 function renderAll(){
   const z=d3.zoomIdentity.translate(S.view.x,S.view.y).scale(S.view.k); svg.call(zoom.transform,z);
-  renderGuides(); renderRef(); renderShapes(); renderSelection(); renderInspector(); renderLayers(); renderWarnings(); renderComplexity(); applyModes(); updateStatus();
+  renderGuides(); renderRef(); renderShapes(); renderSelection(); renderInspector(); renderLayers(); renderWarnings(); renderComplexity(); applyModes(); applyHelpTips(); updateStatus();
 }
 
 const zoom=d3.zoom().scaleExtent([0.5,20]).on('zoom',ev=>{root.attr('transform',ev.transform); S.view={k:ev.transform.k,x:ev.transform.x,y:ev.transform.y};});
@@ -351,6 +399,7 @@ function bindUI(){
   d3.select('#copySvgBtn').on('click',copySVG);
   d3.select('#exportPngBtn').on('click',exportPNG);
   d3.select('#resetViewBtn').on('click',()=>{S.view={k:1,x:0,y:0};renderAll();});
+  d3.select('#helpModeBtn').on('click',()=>setHelpMode(!S.helpMode));
 
   [['#modeEdit','edit'],['#modeFinal','final'],['#modeInverse','inverse'],['#modeSmall','small'],['#modeSil','silhouette']].forEach(([id,m])=>d3.select(id).on('click',()=>{S.mode=m;renderAll();}));
 
@@ -406,7 +455,7 @@ function applyModes(){
   if(S.mode==='small') svg.classed('small-preview',true); else svg.classed('small-preview',false);
 }
 
-bindUI(); setTool('select'); updateRefFields(); renderAll();
+bindUI(); setTool('select'); updateRefFields(); updateHelpButton(); renderAll();
 })();
 </script>
 </body>
