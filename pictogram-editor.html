@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pictogram Grid Editor 40×40</title>
+  <style>
+    :root{--bg:#f6f7f8;--panel:#ffffff;--line:#d8dde3;--text:#222;--muted:#66717d;--accent:#2a6df4;--danger:#c62828;--dark:#121417}
+    *{box-sizing:border-box} html,body{height:100%;margin:0;font:13px/1.3 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);background:var(--bg)}
+    button,input,select{font:inherit}
+    #app{height:100%;display:grid;grid-template-rows:48px 1fr 28px;gap:6px;padding:6px}
+    .toolbar,.status{background:var(--panel);border:1px solid var(--line);display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:8px}
+    .main{display:grid;grid-template-columns:220px 1fr 280px;gap:6px;min-height:0}
+    .sidebar{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;overflow:auto}
+    .canvas-wrap{background:var(--panel);border:1px solid var(--line);border-radius:8px;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;min-height:0}
+    .sec{margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #edf0f3}
+    .sec h4{margin:6px 0 8px;font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+    .row{display:flex;gap:6px;align-items:center;margin:4px 0}
+    .row>label{min-width:80px;color:var(--muted);font-size:12px}
+    .row input[type="number"],.row input[type="text"],.row select{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:6px}
+    .btn{padding:5px 8px;border:1px solid var(--line);background:#fff;border-radius:6px;cursor:pointer}
+    .btn:hover{border-color:#b8c0ca}
+    .btn.active{background:#eaf1ff;border-color:#90b0ff;color:#1546c8}
+    .btn.small{padding:3px 6px;font-size:12px}
+    .tool-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+    .status{justify-content:space-between;font-size:12px;color:var(--muted)}
+    #svgHost{width:min(100%,calc(100vh - 140px));height:min(100%,calc(100vh - 140px));aspect-ratio:1/1;border:1px solid #d4dae1;background:#fff}
+    .layer-row{display:grid;grid-template-columns:1fr auto auto;align-items:center;gap:4px;margin:2px 0}
+    .mini{font-size:11px;color:var(--muted)}
+    .warn{color:var(--danger);font-weight:600}
+    .dark-preview .canvas-wrap{background:#1a1d22}
+    .dark-preview #svgHost{background:#111}
+    .handle{fill:#fff;stroke:#2a6df4;stroke-width:0.08;cursor:pointer}
+    .rot-handle{fill:#2a6df4;stroke:#fff;stroke-width:0.08}
+    .sel-box{fill:none;stroke:#2a6df4;stroke-width:0.08;stroke-dasharray:0.4 0.3}
+    .guide{pointer-events:none}
+    .small-preview{transform:scale(0.25);transform-origin:center center}
+    textarea{width:100%;min-height:70px;border:1px solid var(--line);border-radius:6px;padding:6px}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="toolbar">
+    <button class="btn" id="newBtn">New</button>
+    <button class="btn" id="saveJsonBtn">Save JSON</button>
+    <input type="file" id="loadJsonInput" accept="application/json" style="display:none" />
+    <button class="btn" id="loadJsonBtn">Load JSON</button>
+    <button class="btn" id="exportSvgBtn">Export SVG</button>
+    <button class="btn" id="copySvgBtn">Copy SVG</button>
+    <button class="btn" id="exportPngBtn">Export PNG</button>
+    <button class="btn" id="resetViewBtn">Reset View</button>
+    <span style="margin-left:auto"></span>
+    <button class="btn" id="modeEdit">Edit</button>
+    <button class="btn" id="modeFinal">Final Preview</button>
+    <button class="btn" id="modeInverse">Inverse</button>
+    <button class="btn" id="modeSmall">Small</button>
+    <button class="btn" id="modeSil">Silhouette</button>
+  </div>
+  <div class="main">
+    <div class="sidebar" id="leftBar">
+      <div class="sec">
+        <h4>Tools</h4>
+        <div class="tool-grid" id="tools"></div>
+      </div>
+      <div class="sec">
+        <h4>Primitives</h4>
+        <div class="tool-grid" id="primitives"></div>
+      </div>
+      <div class="sec">
+        <h4>Grid & Guides</h4>
+        <div class="row"><label><input type="checkbox" id="gGrid" checked> 40×40 Grid</label></div>
+        <div class="row"><label><input type="checkbox" id="gCircle"> Inscribed Circle</label></div>
+        <div class="row"><label><input type="checkbox" id="gCenter" checked> Center Lines</label></div>
+        <div class="row"><label><input type="checkbox" id="gDiag"> Diagonals</label></div>
+        <div class="row"><label><input type="checkbox" id="gMargin"> Margin Guide</label></div>
+        <div class="row"><label><input type="checkbox" id="gProportion"> Head/Body Guide</label></div>
+      </div>
+      <div class="sec">
+        <h4>Snap</h4>
+        <div class="row"><label>Mode</label><select id="snapMode"><option value="1">1 unit</option><option value="0.5">0.5 unit</option><option value="0.25">0.25 unit</option><option value="0">Off</option></select></div>
+        <div class="row"><label><input type="checkbox" id="angleLock"> Angle Constraint</label></div>
+        <div class="row"><label><input type="checkbox" id="symmetry"> Symmetry</label></div>
+        <div class="row"><label><input type="checkbox" id="mirrorDup"> Mirror Duplicate</label></div>
+      </div>
+      <div class="sec">
+        <h4>Layers</h4>
+        <div id="layerList"></div>
+      </div>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <svg id="svgHost" viewBox="0 0 40 40"></svg>
+    </div>
+    <div class="sidebar" id="rightBar">
+      <div class="sec">
+        <h4>Reference Image</h4>
+        <input type="file" id="refLoad" accept="image/png,image/jpeg,image/webp" />
+        <div class="row"><label><input type="checkbox" id="refShow" checked> Show</label></div>
+        <div class="row"><label><input type="checkbox" id="refLock"> Lock</label></div>
+        <div class="row"><label><input type="checkbox" id="refAspect" checked> Keep Aspect</label></div>
+        <div class="row"><label>Opacity</label><input id="refOpacity" type="range" min="0" max="1" step="0.01" value="0.35" /></div>
+        <div class="row"><label>X</label><input id="refX" type="number" step="0.25"></div>
+        <div class="row"><label>Y</label><input id="refY" type="number" step="0.25"></div>
+        <div class="row"><label>W</label><input id="refW" type="number" step="0.25"></div>
+        <div class="row"><label>H</label><input id="refH" type="number" step="0.25"></div>
+        <div class="row"><label>Scale</label><input id="refScale" type="number" step="0.01" value="1"></div>
+        <div class="row"><label>Rotate</label><input id="refRot" type="number" step="1" value="0"></div>
+        <div class="row"><button class="btn small" id="refReset">Reset Transform</button></div>
+      </div>
+      <div class="sec">
+        <h4>Inspector</h4>
+        <div id="inspector"><div class="mini">No selection</div></div>
+      </div>
+      <div class="sec">
+        <h4>Construction Aids</h4>
+        <div class="row"><label>Stroke preset</label><select id="strokePreset"><option>0.5</option><option selected>1</option><option>1.5</option><option>2</option></select></div>
+        <div class="row"><label>Corner preset</label><select id="cornerPreset"><option>0</option><option selected>0.5</option><option>1</option><option>2</option></select></div>
+        <div class="row"><label><input type="checkbox" id="warnBounds" checked> Warn bounds</label></div>
+        <div class="row"><label><input type="checkbox" id="warnStroke" checked> Warn stroke logic</label></div>
+        <div id="complexity" class="mini">Complexity: 0</div>
+      </div>
+      <div class="sec">
+        <h4>Edit</h4>
+        <div class="row"><button class="btn small" id="dupBtn">Duplicate</button><button class="btn small" id="delBtn">Delete</button></div>
+        <div class="row"><button class="btn small" id="groupBtn">Group</button><button class="btn small" id="ungroupBtn">Ungroup</button></div>
+        <div class="row"><button class="btn small" id="frontBtn">Bring +</button><button class="btn small" id="backBtn">Send -</button></div>
+        <div class="row"><button class="btn small" id="flipHBtn">Flip H</button><button class="btn small" id="flipVBtn">Flip V</button></div>
+        <div class="row"><button class="btn small" id="alignL">Align L</button><button class="btn small" id="alignR">Align R</button><button class="btn small" id="alignC">Align C</button></div>
+        <div class="row"><button class="btn small" id="alignT">Align T</button><button class="btn small" id="alignB">Align B</button><button class="btn small" id="alignM">Align M</button></div>
+        <div class="row"><button class="btn small" id="distH">Dist H</button><button class="btn small" id="distV">Dist V</button></div>
+      </div>
+    </div>
+  </div>
+  <div class="status"><div id="statusLeft">Ready</div><div id="statusRight">(0,0) · snap 1</div></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+(() => {
+const C={W:40,H:40,layers:["guides","reference","sketch","final","annotations"]};
+const toolDefs=[['select','V'],['rectangle','R'],['roundRect','U'],['ellipse','O'],['line','L'],['polyline','I'],['polygon','G'],['path','P'],['curve','C'],['arc','A'],['text','T']];
+const primDefs=[['head','Head'],['limb','Limb'],['torso','Torso'],['door','Door'],['arrow','Arrow'],['step','Step']];
+const S={
+  tool:'select',snap:1,angleLock:false,symmetry:false,mirrorDup:false,
+  guides:{grid:true,circle:false,center:true,diag:false,margin:false,proportion:false},
+  layers:C.layers.map((n,i)=>({id:n,visible:true,locked:n==='guides',order:i})),
+  shapes:[],sel:[],hover:null,drag:null,mode:'edit',clipboard:[],
+  ref:{src:null,show:true,lock:false,opacity:.35,x:5,y:5,w:30,h:30,scale:1,rot:0,keepAspect:true,nw:0,nh:0},
+  view:{k:1,x:0,y:0},undo:[],redo:[],msg:'Ready'
+};
+let idCounter=1; const nid=()=>`s${idCounter++}`;
+const svg=d3.select('#svgHost');
+const root=svg.append('g').attr('id','viewRoot');
+const gGuides=root.append('g').attr('id','guidesLayer');
+const gRef=root.append('g').attr('id','refLayer');
+const gSketch=root.append('g').attr('id','sketchLayer');
+const gFinal=root.append('g').attr('id','finalLayer');
+const gAnno=root.append('g').attr('id','annoLayer');
+const gOverlay=root.append('g').attr('id','overlayLayer');
+const layerMap={guides:gGuides,reference:gRef,sketch:gSketch,final:gFinal,annotations:gAnno};
+const dline=d3.line();
+function clone(v){return JSON.parse(JSON.stringify(v));}
+function saveHistory(){S.undo.push(clone({shapes:S.shapes,ref:S.ref,guides:S.guides,layers:S.layers,view:S.view,snap:S.snap})); if(S.undo.length>80)S.undo.shift(); S.redo=[];}
+function restore(st){S.shapes=clone(st.shapes);S.ref=clone(st.ref);S.guides=clone(st.guides);S.layers=clone(st.layers);S.view=clone(st.view);S.snap=st.snap;renderAll();}
+function snap(v){if(!S.snap) return +v; const m=Number(S.snap); return Math.round(v/m)*m;}
+function pt(ev){const p=d3.pointer(ev,svg.node()); const inv=d3.zoomTransform(svg.node()).invert(p); return {x:snap(inv[0]),y:snap(inv[1]),rx:inv[0],ry:inv[1]};}
+function setMsg(m){S.msg=m;updateStatus();}
+function updateStatus(c){const p=c||{x:'-',y:'-'}; d3.select('#statusLeft').text(S.msg); d3.select('#statusRight').text(`(${p.x},${p.y}) · snap ${S.snap||'off'} · ${S.tool}`);}
+
+function renderGuides(){gGuides.selectAll('*').remove();
+  gGuides.append('rect').attr('x',0).attr('y',0).attr('width',40).attr('height',40).attr('fill','none').attr('stroke','#222').attr('stroke-width',0.12).attr('class','guide');
+  if(S.guides.grid){for(let i=1;i<40;i++){gGuides.append('line').attr('x1',i).attr('y1',0).attr('x2',i).attr('y2',40).attr('stroke','#e6eaef').attr('stroke-width',0.05).attr('class','guide');gGuides.append('line').attr('x1',0).attr('y1',i).attr('x2',40).attr('y2',i).attr('stroke','#e6eaef').attr('stroke-width',0.05).attr('class','guide');}}
+  if(S.guides.circle) gGuides.append('circle').attr('cx',20).attr('cy',20).attr('r',20).attr('fill','none').attr('stroke','#b7c2ce').attr('stroke-dasharray','0.4 0.4').attr('stroke-width',0.08);
+  if(S.guides.center){gGuides.append('line').attr('x1',20).attr('y1',0).attr('x2',20).attr('y2',40).attr('stroke','#a5b2c0').attr('stroke-width',0.08);gGuides.append('line').attr('x1',0).attr('y1',20).attr('x2',40).attr('y2',20).attr('stroke','#a5b2c0').attr('stroke-width',0.08);}
+  if(S.guides.diag){gGuides.append('line').attr('x1',0).attr('y1',0).attr('x2',40).attr('y2',40).attr('stroke','#c4ccd7').attr('stroke-dasharray','0.3 0.3').attr('stroke-width',0.08);gGuides.append('line').attr('x1',40).attr('y1',0).attr('x2',0).attr('y2',40).attr('stroke','#c4ccd7').attr('stroke-dasharray','0.3 0.3').attr('stroke-width',0.08);} 
+  if(S.guides.margin) gGuides.append('rect').attr('x',2).attr('y',2).attr('width',36).attr('height',36).attr('fill','none').attr('stroke','#b8c4d1').attr('stroke-dasharray','0.4 0.3').attr('stroke-width',0.08);
+  if(S.guides.proportion){gGuides.append('circle').attr('cx',20).attr('cy',8).attr('r',4).attr('fill','none').attr('stroke','#9fb3cb').attr('stroke-dasharray','0.3 0.2').attr('stroke-width',0.08);gGuides.append('rect').attr('x',14).attr('y',12).attr('width',12).attr('height',18).attr('fill','none').attr('stroke','#9fb3cb').attr('stroke-dasharray','0.3 0.2').attr('stroke-width',0.08);} 
+}
+
+function pathFromShape(s){
+  if(s.type==='rect'||s.type==='roundRect'||s.type==='torso'||s.type==='door'||s.type==='step') return `<rect x="${s.x}" y="${s.y}" width="${s.w}" height="${s.h}" rx="${s.rx||0}" ry="${s.rx||0}"/>`;
+  if(s.type==='ellipse'||s.type==='head') return `<ellipse cx="${s.x+s.w/2}" cy="${s.y+s.h/2}" rx="${Math.abs(s.w/2)}" ry="${Math.abs(s.h/2)}"/>`;
+  if(s.type==='line'||s.type==='limb') return `<line x1="${s.x1}" y1="${s.y1}" x2="${s.x2}" y2="${s.y2}"/>`;
+  if(['polyline','polygon','path','curve','arrow','arc'].includes(s.type)) {const p=(s.points||[]).map(p=>p.join(',')).join(' '); if(s.type==='polyline') return `<polyline points="${p}"/>`; if(s.type==='polygon'||s.type==='arrow') return `<polygon points="${p}"/>`; return `<path d="${shapePathD(s)}"/>`;}
+  if(s.type==='text') return `<text x="${s.x}" y="${s.y}">${s.text||''}</text>`;
+  return '';
+}
+function shapePathD(s){
+  if(s.type==='curve'&&s.points.length>=3){const [a,b,c]=s.points; return `M ${a[0]} ${a[1]} Q ${b[0]} ${b[1]} ${c[0]} ${c[1]}`;}
+  if(s.type==='arc'&&s.points.length>=2){const a=s.points[0],b=s.points[1];const r=Math.hypot(b[0]-a[0],b[1]-a[1]);return `M ${a[0]} ${a[1]} A ${r} ${r} 0 0 1 ${b[0]} ${b[1]}`;}
+  const pts=s.points||[]; if(!pts.length) return ''; let d=`M ${pts[0][0]} ${pts[0][1]}`; for(let i=1;i<pts.length;i++) d+=` L ${pts[i][0]} ${pts[i][1]}`; if(s.closed) d+=' Z'; return d;
+}
+function bbox(s){
+  if(['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)) return {x:s.x,y:s.y,w:s.w||0,h:s.h||0};
+  if(['line','limb'].includes(s.type)) {const x=Math.min(s.x1,s.x2),y=Math.min(s.y1,s.y2),w=Math.abs(s.x2-s.x1),h=Math.abs(s.y2-s.y1);return {x,y,w,h};}
+  const pts=s.points||[]; if(!pts.length) return {x:0,y:0,w:0,h:0}; const xs=pts.map(p=>p[0]), ys=pts.map(p=>p[1]); return {x:Math.min(...xs),y:Math.min(...ys),w:Math.max(...xs)-Math.min(...xs),h:Math.max(...ys)-Math.min(...ys)};
+}
+function shapeVisible(s){const l=S.layers.find(v=>v.id===s.layer); return l?.visible!==false && s.visible!==false;}
+function layerLocked(layer){const l=S.layers.find(v=>v.id===layer); return l?.locked===true;}
+function drawShape(sel,s){const c = sel.append('g').attr('class','shape').attr('data-id',s.id).attr('transform',`rotate(${s.rot||0} ${center(s).x} ${center(s).y})`);
+  const common={fill:s.fill??'#000',stroke:s.stroke??'none','stroke-width':s.strokeWidth??0,opacity:s.opacity??1};
+  let el;
+  if(['rect','roundRect','torso','door','step'].includes(s.type)) el=c.append('rect').attr('x',s.x).attr('y',s.y).attr('width',s.w).attr('height',s.h).attr('rx',s.rx||0);
+  else if(['ellipse','head'].includes(s.type)) el=c.append('ellipse').attr('cx',s.x+s.w/2).attr('cy',s.y+s.h/2).attr('rx',Math.abs(s.w/2)).attr('ry',Math.abs(s.h/2));
+  else if(['line','limb'].includes(s.type)) el=c.append('line').attr('x1',s.x1).attr('y1',s.y1).attr('x2',s.x2).attr('y2',s.y2).attr('stroke',s.stroke||'#000').attr('stroke-width',s.strokeWidth||1).attr('fill','none').attr('stroke-linecap','round');
+  else if(s.type==='polyline') el=c.append('polyline').attr('points',(s.points||[]).map(p=>p.join(',')).join(' ')).attr('fill','none');
+  else if(s.type==='polygon'||s.type==='arrow') el=c.append('polygon').attr('points',(s.points||[]).map(p=>p.join(',')).join(' '));
+  else if(['path','curve','arc'].includes(s.type)) el=c.append('path').attr('d',shapePathD(s)).attr('fill',s.closed?(s.fill??'#000'):'none');
+  else if(s.type==='text') el=c.append('text').attr('x',s.x).attr('y',s.y).attr('font-size',s.fontSize||2.5).text(s.text||'Text');
+  if(el && !['line','limb'].includes(s.type)) Object.entries(common).forEach(([k,v])=>el.attr(k,v));
+  c.classed('selected',S.sel.includes(s.id));
+  c.style('pointer-events', s.locked||layerLocked(s.layer) ? 'none':'all');
+  c.on('mousedown', (ev)=>{ev.stopPropagation(); if(S.tool!=='select')return; if(!ev.shiftKey) S.sel=[s.id]; else S.sel=S.sel.includes(s.id)?S.sel.filter(i=>i!==s.id):[...S.sel,s.id]; renderAll(); startDragSelection(ev);});
+}
+function center(s){const b=bbox(s); return {x:b.x+b.w/2,y:b.y+b.h/2};}
+function renderShapes(){[gSketch,gFinal,gAnno].forEach(g=>g.selectAll('*').remove());
+  S.shapes.forEach(s=>{ if(!shapeVisible(s)) return; const layer=layerMap[s.layer]||gFinal; drawShape(layer,s); });
+}
+function renderRef(){gRef.selectAll('*').remove(); if(!S.ref.src||!S.ref.show) return; const r=S.ref;
+  const refg=gRef.append('g').attr('transform',`rotate(${r.rot} ${r.x+r.w*r.scale/2} ${r.y+r.h*r.scale/2})`);
+  const img=refg.append('image').attr('href',r.src).attr('x',r.x).attr('y',r.y).attr('width',r.w*r.scale).attr('height',r.h*r.scale).attr('opacity',r.opacity);
+  if(r.lock){img.style('pointer-events','none');return;}
+  img.call(d3.drag().on('drag',(ev)=>{r.x=snap(r.x+ev.dx/10);r.y=snap(r.y+ev.dy/10);updateRefFields();renderAll();}));
+  const hb=[['nw',r.x,r.y],['ne',r.x+r.w*r.scale,r.y],['sw',r.x,r.y+r.h*r.scale],['se',r.x+r.w*r.scale,r.y+r.h*r.scale]];
+  refg.selectAll('circle.handle').data(hb).enter().append('circle').attr('class','handle').attr('r',0.35).attr('cx',d=>d[1]).attr('cy',d=>d[2])
+   .call(d3.drag().on('drag',(ev,d)=>{const px=snap(ev.x/10),py=snap(ev.y/10); if(d[0].includes('w')){const old=r.x+r.w*r.scale; r.x=px; r.w=Math.max(0.5,(old-r.x)/r.scale);} if(d[0].includes('e')) r.w=Math.max(0.5,(px-r.x)/r.scale); if(d[0].includes('n')){const old=r.y+r.h*r.scale; r.y=py; r.h=Math.max(0.5,(old-r.y)/r.scale);} if(d[0].includes('s')) r.h=Math.max(0.5,(py-r.y)/r.scale); if(r.keepAspect){const ar=r.nw&&r.nh?r.nw/r.nh:1; r.h=r.w/ar;} updateRefFields(); renderAll();}));
+}
+function renderSelection(){gOverlay.selectAll('*').remove(); if(!S.sel.length) return;
+  const items=S.shapes.filter(s=>S.sel.includes(s.id));
+  const bs=items.map(bbox); const x=Math.min(...bs.map(b=>b.x)), y=Math.min(...bs.map(b=>b.y)), r=Math.max(...bs.map(b=>b.x+b.w)), b=Math.max(...bs.map(b=>b.y+b.h));
+  gOverlay.append('rect').attr('class','sel-box').attr('x',x).attr('y',y).attr('width',r-x).attr('height',b-y);
+  const handles=[[x,y,'nw'],[r,y,'ne'],[x,b,'sw'],[r,b,'se']];
+  gOverlay.selectAll('rect.handle').data(handles).enter().append('rect').attr('class','handle').attr('width',0.7).attr('height',0.7).attr('x',d=>d[0]-0.35).attr('y',d=>d[1]-0.35)
+    .call(d3.drag().on('start',()=>saveHistory()).on('drag',(ev,d)=>resizeSel(ev,d[2],{x,y,r,b}))); 
+  gOverlay.append('circle').attr('class','rot-handle').attr('r',0.35).attr('cx',(x+r)/2).attr('cy',y-1)
+    .call(d3.drag().on('start',()=>saveHistory()).on('drag',(ev)=>rotateSel(ev,{x:(x+r)/2,y:(y+b)/2})));
+  const sel=S.shapes.filter(s=>S.sel.includes(s.id)&&['path','polyline','polygon','curve','arc'].includes(s.type));
+  sel.forEach(s=>{(s.points||[]).forEach((p,i)=>{gOverlay.append('circle').attr('class','handle').attr('r',0.28).attr('cx',p[0]).attr('cy',p[1]).call(d3.drag().on('start',()=>saveHistory()).on('drag',(ev)=>{p[0]=snap(ev.x/10);p[1]=snap(ev.y/10);renderAll();}));});});
+}
+function resizeSel(ev,corner,bb){const p=pt(ev); let sx=1,sy=1; const cx=(bb.x+bb.r)/2, cy=(bb.y+bb.b)/2;
+  if(corner.includes('e')) sx=(p.x-cx)/(bb.r-cx||1); if(corner.includes('w')) sx=(cx-p.x)/(cx-bb.x||1); if(corner.includes('s')) sy=(p.y-cy)/(bb.b-cy||1); if(corner.includes('n')) sy=(cy-p.y)/(cy-bb.y||1);
+  S.shapes.forEach(s=>{if(!S.sel.includes(s.id))return; scaleShape(s,sx,sy,cx,cy)}); renderAll();}
+function scaleShape(s,sx,sy,cx,cy){const tr=(x,y)=>[snap(cx+(x-cx)*sx),snap(cy+(y-cy)*sy)];
+  if(['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)){const p1=tr(s.x,s.y), p2=tr(s.x+s.w,s.y+s.h); s.x=Math.min(p1[0],p2[0]); s.y=Math.min(p1[1],p2[1]); s.w=Math.abs(p2[0]-p1[0]); s.h=Math.abs(p2[1]-p1[1]);}
+  else if(['line','limb'].includes(s.type)){[s.x1,s.y1]=tr(s.x1,s.y1); [s.x2,s.y2]=tr(s.x2,s.y2);} 
+  else if(s.points) s.points=s.points.map(p=>tr(p[0],p[1]));
+}
+function rotateSel(ev,c){const p=pt(ev); const a=Math.atan2(p.y-c.y,p.x-c.x)*180/Math.PI; S.shapes.forEach(s=>{if(S.sel.includes(s.id)) s.rot=snap(a);}); renderAll();}
+function moveShape(s,dx,dy){if(['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)){s.x=snap(s.x+dx);s.y=snap(s.y+dy);} else if(['line','limb'].includes(s.type)){s.x1=snap(s.x1+dx);s.y1=snap(s.y1+dy);s.x2=snap(s.x2+dx);s.y2=snap(s.y2+dy);} else if(s.points) s.points=s.points.map(p=>[snap(p[0]+dx),snap(p[1]+dy)]);
+}
+function renderInspector(){const box=d3.select('#inspector'); box.html(''); if(!S.sel.length){box.append('div').attr('class','mini').text('No selection'); return;}
+  const s=S.shapes.find(x=>x.id===S.sel[0]); if(!s)return;
+  const rows=[];
+  rows.push(['type',s.type,null]);
+  const b=bbox(s); rows.push(['x',b.x,'x']);rows.push(['y',b.y,'y']);rows.push(['width',b.w,'w']);rows.push(['height',b.h,'h']);
+  rows.push(['rotation',s.rot||0,'rot']);rows.push(['stroke width',s.strokeWidth??0,'strokeWidth']);rows.push(['opacity',s.opacity??1,'opacity']);rows.push(['corner radius',s.rx||0,'rx']);
+  rows.forEach(([n,v,k])=>{const r=box.append('div').attr('class','row');r.append('label').text(n); if(k){r.append('input').attr('type','number').attr('step','0.25').attr('value',v).on('change',(ev)=>{saveHistory(); setProp(s,k,+ev.target.value); renderAll();});}else r.append('div').text(v);});
+  [['fill',s.fill??'#000'],['stroke',s.stroke??'#000']].forEach(([n,v])=>{const r=box.append('div').attr('class','row');r.append('label').text(n);r.append('input').attr('type','color').attr('value',toColor(v)).on('input',(ev)=>{s[n]=ev.target.value;renderAll();});});
+  const lr=box.append('div').attr('class','row'); lr.append('label').text('Layer'); const ls=lr.append('select').on('change',ev=>{s.layer=ev.target.value;renderAll();}); C.layers.forEach(l=>ls.append('option').attr('value',l).property('selected',l===s.layer).text(l);
+  const ck=box.append('div').attr('class','row'); ck.append('label').html('<input type="checkbox"> Locked'); ck.select('input').property('checked',!!s.locked).on('change',ev=>{s.locked=ev.target.checked;renderAll();});
+}
+function setProp(s,k,v){if(['x','y','w','h'].includes(k)&&['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)) s[k]=v; else s[k]=v;}
+function toColor(v){if(!v||v==='none')return '#000000'; if(v.startsWith('#')) return v; return '#000000';}
+function renderLayers(){const d=d3.select('#layerList'); d.html(''); S.layers.forEach((l,i)=>{const r=d.append('div').attr('class','layer-row'); r.append('span').text(l.id); r.append('button').attr('class','btn small').text(l.visible?'👁':'🚫').on('click',()=>{l.visible=!l.visible;renderAll();}); r.append('button').attr('class','btn small').text(l.locked?'🔒':'🔓').on('click',()=>{l.locked=!l.locked;renderAll();});});}
+function renderWarnings(){if(!d3.select('#warnBounds').property('checked')&&!d3.select('#warnStroke').property('checked')) return; let out=false,stroke=false; const preset=+d3.select('#strokePreset').property('value');
+  S.shapes.forEach(s=>{const b=bbox(s); if(b.x<0||b.y<0||b.x+b.w>40||b.y+b.h>40) out=true; if((s.strokeWidth??0)!==preset && (s.strokeWidth??0)!==0) stroke=true;});
+  if(out||stroke){const txt=[out?'bounds exceeded':'',stroke?'stroke mismatch':''].filter(Boolean).join(', '); setMsg('Warning: '+txt);} else setMsg('Ready');
+}
+function renderComplexity(){let c=0; S.shapes.forEach(s=>{if(s.points) c+=s.points.length; if(['path','curve','arc'].includes(s.type)) c+=2;}); d3.select('#complexity').text('Complexity: '+c);} 
+function renderAll(){
+  const z=d3.zoomIdentity.translate(S.view.x,S.view.y).scale(S.view.k); svg.call(zoom.transform,z);
+  renderGuides(); renderRef(); renderShapes(); renderSelection(); renderInspector(); renderLayers(); renderWarnings(); renderComplexity(); applyModes(); updateStatus();
+}
+
+const zoom=d3.zoom().scaleExtent([0.5,20]).on('zoom',ev=>{root.attr('transform',ev.transform); S.view={k:ev.transform.k,x:ev.transform.x,y:ev.transform.y};});
+svg.call(zoom).on('dblclick.zoom',null);
+
+function startDraw(ev){if(S.tool==='select') return; if(layerLocked('final')) return;
+  const p=pt(ev); saveHistory();
+  const base={id:nid(),layer:'final',fill:'#000',stroke:'#000',strokeWidth:+d3.select('#strokePreset').property('value'),opacity:1,rot:0,visible:true,locked:false,rx:+d3.select('#cornerPreset').property('value')};
+  let sh;
+  if(S.tool==='rectangle') sh={...base,type:'rect',x:p.x,y:p.y,w:0,h:0};
+  if(S.tool==='roundRect') sh={...base,type:'roundRect',x:p.x,y:p.y,w:0,h:0,rx:+d3.select('#cornerPreset').property('value')};
+  if(S.tool==='ellipse') sh={...base,type:'ellipse',x:p.x,y:p.y,w:0,h:0};
+  if(S.tool==='line') sh={...base,type:'line',x1:p.x,y1:p.y,x2:p.x,y2:p.y,fill:'none'};
+  if(['polyline','polygon','path','curve','arc'].includes(S.tool)){const t=S.tool==='polygon'?'polygon':S.tool; sh={...base,type:t,points:[[p.x,p.y]],closed:S.tool==='polygon',fill:S.tool==='polyline'?'none':'#000'}; S.drag={kind:'multi',shape:sh}; S.shapes.push(sh); S.sel=[sh.id]; renderAll(); return;}
+  if(S.tool==='text'){const txt=prompt('Annotation text','Exit'); if(!txt)return; sh={...base,type:'text',layer:'annotations',x:p.x,y:p.y,w:8,h:3,text:txt,fontSize:2.6,fill:'#111',stroke:'none',strokeWidth:0}; S.shapes.push(sh); S.sel=[sh.id]; renderAll(); return;}
+  if(sh){S.drag={kind:'draw',id:sh.id,start:p}; S.shapes.push(sh); S.sel=[sh.id]; renderAll();}
+}
+function updateDraw(ev){if(!S.drag) return; const p=pt(ev);
+  if(S.drag.kind==='draw'){const s=S.shapes.find(x=>x.id===S.drag.id); if(!s)return; const a=S.drag.start;
+    if(['rect','roundRect','ellipse'].includes(s.type)){s.x=Math.min(a.x,p.x);s.y=Math.min(a.y,p.y);s.w=Math.abs(p.x-a.x);s.h=Math.abs(p.y-a.y);} 
+    if(['line'].includes(s.type)){let x=p.x,y=p.y; if(S.angleLock||ev.shiftKey){const dx=p.x-a.x,dy=p.y-a.y;const ang=Math.atan2(dy,dx);const step=Math.PI/4;const aa=Math.round(ang/step)*step;const len=Math.hypot(dx,dy);x=snap(a.x+Math.cos(aa)*len);y=snap(a.y+Math.sin(aa)*len);} s.x2=x;s.y2=y;}
+    renderAll();
+  } else if(S.drag.kind==='move'){const ddx=snap((ev.dx||0)/10),ddy=snap((ev.dy||0)/10); S.shapes.forEach(s=>{if(S.sel.includes(s.id)) moveShape(s,ddx,ddy)}); renderAll();}
+}
+function finishDraw(ev){if(!S.drag) return; if(S.drag.kind==='multi'){const p=pt(ev),s=S.drag.shape; const last=s.points[s.points.length-1]; if(Math.hypot(p.x-last[0],p.y-last[1])>0.01) s.points.push([p.x,p.y]); renderAll(); return;} S.drag=null; renderAll();}
+function endMulti(){if(S.drag&&S.drag.kind==='multi'){S.drag=null; renderAll();}}
+
+function startDragSelection(ev){saveHistory(); S.drag={kind:'move'};}
+svg.on('mousedown',(ev)=>{
+  if(ev.target===svg.node()){
+    if(S.tool==='select'){ if(!ev.shiftKey) S.sel=[]; renderAll(); if(!ev.shiftKey){const p=pt(ev); S.drag={kind:'marquee',start:p,cur:p};}}
+    else startDraw(ev);
+  }
+});
+svg.on('mousemove',(ev)=>{const p=pt(ev); updateStatus({x:p.x,y:p.y}); if(S.drag?.kind==='marquee'){S.drag.cur=p; drawMarquee();} else if(S.drag&&S.drag.kind!=='multi') updateDraw(ev);});
+svg.on('mouseup',(ev)=>{if(S.drag?.kind==='marquee'){finishMarquee();} else if(S.drag&&S.drag.kind!=='multi') finishDraw(ev);});
+svg.on('dblclick',(ev)=>{if(S.drag?.kind==='multi') endMulti();});
+function drawMarquee(){gOverlay.selectAll('.marq').remove(); const a=S.drag.start,b=S.drag.cur; gOverlay.append('rect').attr('class','marq sel-box').attr('x',Math.min(a.x,b.x)).attr('y',Math.min(a.y,b.y)).attr('width',Math.abs(b.x-a.x)).attr('height',Math.abs(b.y-a.y));}
+function finishMarquee(){const a=S.drag.start,b=S.drag.cur; const mx=Math.min(a.x,b.x),my=Math.min(a.y,b.y),mw=Math.abs(b.x-a.x),mh=Math.abs(b.y-a.y); S.sel=S.shapes.filter(s=>{const bb=bbox(s); return bb.x>=mx&&bb.y>=my&&bb.x+bb.w<=mx+mw&&bb.y+bb.h<=my+mh;}).map(s=>s.id); S.drag=null; renderAll();}
+
+function addPrimitive(k){saveHistory(); const st={id:nid(),layer:'final',fill:'#000',stroke:'#000',strokeWidth:+d3.select('#strokePreset').property('value'),opacity:1,rot:0,visible:true,locked:false,rx:+d3.select('#cornerPreset').property('value')};
+  if(k==='head') Object.assign(st,{type:'head',x:16,y:4,w:8,h:8});
+  if(k==='limb') Object.assign(st,{type:'limb',x1:12,y:20,x2:28,y2:20,fill:'none',stroke:'#000',strokeWidth:2});
+  if(k==='torso') Object.assign(st,{type:'torso',x:14,y:12,w:12,h:14,rx:1});
+  if(k==='door') Object.assign(st,{type:'door',x:12,y:8,w:16,h:24,rx:0.5});
+  if(k==='arrow') Object.assign(st,{type:'arrow',points:[[8,20],[24,20],[24,16],[32,22],[24,28],[24,24],[8,24]],closed:true,stroke:'none'});
+  if(k==='step') Object.assign(st,{type:'step',x:8,y:24,w:24,h:6,rx:0});
+  S.shapes.push(st); S.sel=[st.id]; if(S.symmetry||S.mirrorDup){const cp=clone(st); cp.id=nid(); mirrorShape(cp); S.shapes.push(cp);}
+  renderAll();
+}
+function mirrorShape(s){const c=20; if(['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)){s.x=2*c-(s.x+s.w);} else if(['line','limb'].includes(s.type)){s.x1=2*c-s.x1; s.x2=2*c-s.x2;} else if(s.points) s.points=s.points.map(p=>[2*c-p[0],p[1]]);}
+
+function selected(){return S.shapes.filter(s=>S.sel.includes(s.id));}
+function delSel(){saveHistory();S.shapes=S.shapes.filter(s=>!S.sel.includes(s.id));S.sel=[];renderAll();}
+function dupSel(){saveHistory();const ns=selected().map(s=>{const c=clone(s);c.id=nid();moveShape(c,1,1);return c});S.shapes.push(...ns);S.sel=ns.map(s=>s.id);renderAll();}
+function groupSel(){if(S.sel.length<2)return;saveHistory();const g={id:nid(),type:'group',children:[...S.sel],layer:'final'}; selected().forEach(s=>s.group=g.id); renderAll();}
+function ungroupSel(){saveHistory(); selected().forEach(s=>delete s.group); renderAll();}
+function zMove(dir){saveHistory(); selected().forEach(s=>{const i=S.shapes.findIndex(x=>x.id===s.id); const ni=Math.max(0,Math.min(S.shapes.length-1,i+dir)); const [it]=S.shapes.splice(i,1); S.shapes.splice(ni,0,it);}); renderAll();}
+function align(mode){const ss=selected(); if(ss.length<2)return; saveHistory(); const bs=ss.map(bbox); const minX=Math.min(...bs.map(b=>b.x)), maxX=Math.max(...bs.map(b=>b.x+b.w)), minY=Math.min(...bs.map(b=>b.y)), maxY=Math.max(...bs.map(b=>b.y+b.h));
+  ss.forEach(s=>{const b=bbox(s); let dx=0,dy=0; if(mode==='l')dx=minX-b.x; if(mode==='r')dx=maxX-(b.x+b.w); if(mode==='c')dx=(minX+maxX)/2-(b.x+b.w/2); if(mode==='t')dy=minY-b.y; if(mode==='b')dy=maxY-(b.y+b.h); if(mode==='m')dy=(minY+maxY)/2-(b.y+b.h/2); moveShape(s,dx,dy);}); renderAll();
+}
+function distribute(axis){const ss=selected(); if(ss.length<3)return; saveHistory(); const arr=ss.map(s=>({s,b:bbox(s)})).sort((a,b)=>axis==='h'?a.b.x-b.b.x:a.b.y-b.b.y); const start=axis==='h'?arr[0].b.x:arr[0].b.y; const end=axis==='h'?(arr.at(-1).b.x):(arr.at(-1).b.y); const step=(end-start)/(arr.length-1); arr.forEach((o,i)=>{const tgt=start+i*step; const cur=axis==='h'?o.b.x:o.b.y; if(axis==='h') moveShape(o.s,tgt-cur,0); else moveShape(o.s,0,tgt-cur);}); renderAll();}
+function flip(axis){saveHistory(); selected().forEach(s=>{const c=center(s); if(axis==='h') mirrorShape(s); else {if(['rect','roundRect','ellipse','head','torso','door','step','text'].includes(s.type)) s.y=2*20-(s.y+s.h); else if(['line','limb'].includes(s.type)){s.y1=40-s.y1;s.y2=40-s.y2;} else if(s.points) s.points=s.points.map(p=>[p[0],40-p[1]]);} }); renderAll();}
+
+function bindUI(){
+  const t=d3.select('#tools'); toolDefs.forEach(([k,l])=>t.append('button').attr('class','btn small').attr('id','tool_'+k).text(l).on('click',()=>setTool(k)));
+  const p=d3.select('#primitives'); primDefs.forEach(([k,l])=>p.append('button').attr('class','btn small').text(l).on('click',()=>addPrimitive(k)));
+  function cb(id,key){d3.select(id).on('change',ev=>{S.guides[key]=ev.target.checked;renderAll();});}
+  cb('#gGrid','grid');cb('#gCircle','circle');cb('#gCenter','center');cb('#gDiag','diag');cb('#gMargin','margin');cb('#gProportion','proportion');
+  d3.select('#snapMode').on('change',ev=>{S.snap=+ev.target.value;updateStatus();});
+  d3.select('#angleLock').on('change',ev=>S.angleLock=ev.target.checked);
+  d3.select('#symmetry').on('change',ev=>S.symmetry=ev.target.checked);
+  d3.select('#mirrorDup').on('change',ev=>S.mirrorDup=ev.target.checked);
+
+  d3.select('#newBtn').on('click',()=>{if(confirm('Clear project?')){S.shapes=[];S.sel=[];S.ref.src=null;saveHistory();renderAll();}});
+  d3.select('#saveJsonBtn').on('click',saveJSON);
+  d3.select('#loadJsonBtn').on('click',()=>d3.select('#loadJsonInput').node().click());
+  d3.select('#loadJsonInput').on('change',loadJSON);
+  d3.select('#exportSvgBtn').on('click',exportSVG);
+  d3.select('#copySvgBtn').on('click',copySVG);
+  d3.select('#exportPngBtn').on('click',exportPNG);
+  d3.select('#resetViewBtn').on('click',()=>{S.view={k:1,x:0,y:0};renderAll();});
+
+  [['#modeEdit','edit'],['#modeFinal','final'],['#modeInverse','inverse'],['#modeSmall','small'],['#modeSil','silhouette']].forEach(([id,m])=>d3.select(id).on('click',()=>{S.mode=m;renderAll();}));
+
+  d3.select('#refLoad').on('change',loadReference);
+  d3.select('#refShow').on('change',ev=>{S.ref.show=ev.target.checked;renderAll();});
+  d3.select('#refLock').on('change',ev=>{S.ref.lock=ev.target.checked;renderAll();});
+  d3.select('#refAspect').on('change',ev=>S.ref.keepAspect=ev.target.checked);
+  d3.select('#refOpacity').on('input',ev=>{S.ref.opacity=+ev.target.value;renderAll();});
+  ['X','Y','W','H','Scale','Rot'].forEach(k=>d3.select('#ref'+k).on('change',ev=>{S.ref[k.toLowerCase()==='rot'?'rot':k.toLowerCase()]=+ev.target.value;renderAll();}));
+  d3.select('#refReset').on('click',()=>{Object.assign(S.ref,{x:5,y:5,w:30,h:30,scale:1,rot:0});updateRefFields();renderAll();});
+
+  d3.select('#dupBtn').on('click',dupSel);d3.select('#delBtn').on('click',delSel);d3.select('#groupBtn').on('click',groupSel);d3.select('#ungroupBtn').on('click',ungroupSel);
+  d3.select('#frontBtn').on('click',()=>zMove(1));d3.select('#backBtn').on('click',()=>zMove(-1));
+  d3.select('#alignL').on('click',()=>align('l'));d3.select('#alignR').on('click',()=>align('r'));d3.select('#alignC').on('click',()=>align('c'));d3.select('#alignT').on('click',()=>align('t'));d3.select('#alignB').on('click',()=>align('b'));d3.select('#alignM').on('click',()=>align('m'));
+  d3.select('#distH').on('click',()=>distribute('h'));d3.select('#distV').on('click',()=>distribute('v'));
+  d3.select('#flipHBtn').on('click',()=>flip('h'));d3.select('#flipVBtn').on('click',()=>flip('v'));
+
+  window.addEventListener('keydown',keybind);
+}
+function keybind(e){const cmd=e.ctrlKey||e.metaKey;
+  if(cmd&&e.key.toLowerCase()==='z'){e.preventDefault(); if(e.shiftKey) redo(); else undo(); return;}
+  if(cmd&&e.key.toLowerCase()==='c'){e.preventDefault(); S.clipboard=clone(selected()); return;}
+  if(cmd&&e.key.toLowerCase()==='v'){e.preventDefault(); saveHistory(); const cp=clone(S.clipboard).map(s=>{s.id=nid();moveShape(s,1,1);return s}); S.shapes.push(...cp); S.sel=cp.map(s=>s.id); renderAll(); return;}
+  if(['Delete','Backspace'].includes(e.key)){e.preventDefault();delSel();return;}
+  if(e.key==='Escape'){S.drag=null;S.sel=[];renderAll();return;}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const d=e.shiftKey?1:0.25; selected().forEach(s=>moveShape(s,e.key==='ArrowRight'?d:e.key==='ArrowLeft'?-d:0,e.key==='ArrowDown'?d:e.key==='ArrowUp'?-d:0)); renderAll(); return;}
+  const map={v:'select',r:'rectangle',o:'ellipse',l:'line',p:'path',t:'text'}; const k=e.key.toLowerCase(); if(map[k]){setTool(map[k]);}
+}
+function setTool(k){S.tool=k; d3.selectAll('#tools .btn').classed('active',false); d3.select('#tool_'+k).classed('active',true); updateStatus();}
+function undo(){if(!S.undo.length)return; const cur=clone({shapes:S.shapes,ref:S.ref,guides:S.guides,layers:S.layers,view:S.view,snap:S.snap}); S.redo.push(cur); const st=S.undo.pop(); restore(st);} 
+function redo(){if(!S.redo.length)return; const cur=clone({shapes:S.shapes,ref:S.ref,guides:S.guides,layers:S.layers,view:S.view,snap:S.snap}); S.undo.push(cur); const st=S.redo.pop(); restore(st);} 
+
+function loadReference(ev){const f=ev.target.files[0]; if(!f)return; const r=new FileReader(); r.onload=()=>{S.ref.src=r.result; const img=new Image(); img.onload=()=>{S.ref.nw=img.width;S.ref.nh=img.height; const ar=img.width/img.height; S.ref.w=28;S.ref.h=28/ar; S.ref.x=6;S.ref.y=(40-S.ref.h)/2; updateRefFields(); renderAll();}; img.src=r.result;}; r.readAsDataURL(f);} 
+function updateRefFields(){['show','lock','aspect'].forEach(()=>{}); d3.select('#refShow').property('checked',S.ref.show); d3.select('#refLock').property('checked',S.ref.lock); d3.select('#refAspect').property('checked',S.ref.keepAspect);
+  d3.select('#refOpacity').property('value',S.ref.opacity); d3.select('#refX').property('value',S.ref.x);d3.select('#refY').property('value',S.ref.y);d3.select('#refW').property('value',S.ref.w);d3.select('#refH').property('value',S.ref.h);d3.select('#refScale').property('value',S.ref.scale);d3.select('#refRot').property('value',S.ref.rot);
+}
+function projectData(){return {version:1,constants:C,guides:S.guides,snap:S.snap,view:S.view,layers:S.layers,ref:S.ref,shapes:S.shapes,mode:S.mode};}
+function saveJSON(){const b=new Blob([JSON.stringify(projectData(),null,2)],{type:'application/json'}); dl(URL.createObjectURL(b),'pictogram-project.json');}
+function loadJSON(ev){const f=ev.target.files[0]; if(!f)return; const fr=new FileReader(); fr.onload=()=>{try{const j=JSON.parse(fr.result); Object.assign(S,{guides:j.guides||S.guides,snap:j.snap??S.snap,view:j.view||S.view,layers:j.layers||S.layers,ref:j.ref||S.ref,shapes:j.shapes||[],mode:j.mode||'edit',sel:[]}); renderAll();}catch(e){alert('Invalid JSON');}}; fr.readAsText(f);}
+function exportSVG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); const b=new Blob([str],{type:'image/svg+xml'}); dl(URL.createObjectURL(b),'pictogram.svg');}
+async function copySVG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); try{await navigator.clipboard.writeText(str); setMsg('SVG copied to clipboard');}catch{setMsg('Clipboard unavailable');} updateStatus();}
+function exportPNG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); const img=new Image(); const blob=new Blob([str],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob); img.onload=()=>{const can=document.createElement('canvas'); can.width=1200;can.height=1200; const ctx=can.getContext('2d'); ctx.fillStyle=S.mode==='inverse'?'#111':'#fff'; ctx.fillRect(0,0,1200,1200); ctx.drawImage(img,0,0,1200,1200); can.toBlob(b=>dl(URL.createObjectURL(b),'pictogram.png'),'image/png'); URL.revokeObjectURL(url);}; img.src=url;}
+function dl(href,name){const a=document.createElement('a'); a.href=href;a.download=name;document.body.appendChild(a);a.click();a.remove();}
+function applyModes(){
+  const edit=S.mode==='edit';
+  d3.select('#modeEdit').classed('active',S.mode==='edit');d3.select('#modeFinal').classed('active',S.mode==='final');d3.select('#modeInverse').classed('active',S.mode==='inverse');d3.select('#modeSmall').classed('active',S.mode==='small');d3.select('#modeSil').classed('active',S.mode==='silhouette');
+  const hideGuides=!edit&&['final','inverse','small','silhouette'].includes(S.mode); gGuides.style('display',hideGuides?'none':'block');
+  gRef.style('display',(S.mode==='final'||S.mode==='inverse'||S.mode==='small'||S.mode==='silhouette')?'none':'block');
+  gAnno.style('display',(S.mode==='final'||S.mode==='inverse'||S.mode==='small'||S.mode==='silhouette')?'none':'block');
+  if(S.mode==='silhouette') svg.selectAll('.shape *').attr('fill','#000').attr('stroke','none');
+  if(S.mode==='inverse'){document.body.classList.add('dark-preview'); svg.style('background','#111'); svg.selectAll('.shape *').attr('fill','#fff').attr('stroke','#fff');}
+  else {document.body.classList.remove('dark-preview'); svg.style('background','#fff');}
+  if(S.mode==='small') svg.classed('small-preview',true); else svg.classed('small-preview',false);
+}
+
+bindUI(); setTool('select'); updateRefFields(); renderAll();
+})();
+</script>
+</body>
+</html>
