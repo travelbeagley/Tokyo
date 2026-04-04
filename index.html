@@ -50,6 +50,7 @@
     <button class="btn" id="copySvgBtn">Copy SVG</button>
     <button class="btn" id="exportPngBtn">Export PNG</button>
     <button class="btn" id="resetViewBtn">Reset View</button>
+    <button class="btn" id="canvasLockBtn">Canvas: Locked</button>
     <button class="btn" id="helpModeBtn">Help: Off</button>
     <span style="margin-left:auto"></span>
     <button class="btn" id="modeEdit">Edit</button>
@@ -169,6 +170,7 @@ const PRIMITIVE_HELP={
 const S={
   tool:'select',snap:1,angleLock:false,symmetry:false,mirrorDup:false,
   helpMode:false,
+  canvasLocked:true,
   guides:{grid:true,circle:false,center:true,diag:false,margin:false,proportion:false},
   layers:C.layers.map((n,i)=>({id:n,visible:true,locked:n==='guides',order:i})),
   shapes:[],sel:[],hover:null,drag:null,mode:'edit',clipboard:[],
@@ -192,8 +194,17 @@ function restore(st){S.shapes=clone(st.shapes);S.ref=clone(st.ref);S.guides=clon
 function snap(v){if(!S.snap) return +v; const m=Number(S.snap); return Math.round(v/m)*m;}
 function pt(ev){const p=d3.pointer(ev,svg.node()); const inv=d3.zoomTransform(svg.node()).invert(p); return {x:snap(inv[0]),y:snap(inv[1]),rx:inv[0],ry:inv[1]};}
 function setMsg(m){S.msg=m;updateStatus();}
-function updateStatus(c){const p=c||{x:'-',y:'-'}; d3.select('#statusLeft').text(S.msg); d3.select('#statusRight').text(`(${p.x},${p.y}) · snap ${S.snap||'off'} · ${S.tool}`);}
+function updateStatus(c){const p=c||{x:'-',y:'-'}; d3.select('#statusLeft').text(S.msg); d3.select('#statusRight').text(`(${p.x},${p.y}) · snap ${S.snap||'off'} · ${S.tool} · canvas ${S.canvasLocked?'locked':'unlocked'}`);}
 function updateHelpButton(){d3.select('#helpModeBtn').classed('active',S.helpMode).text(`Help: ${S.helpMode?'On':'Off'}`);}
+function updateCanvasLockButton(){
+  d3.select('#canvasLockBtn').classed('active',!S.canvasLocked).text(`Canvas: ${S.canvasLocked?'Locked':'Unlocked'}`);
+}
+function setCanvasLocked(locked){
+  S.canvasLocked=!!locked;
+  setMsg(S.canvasLocked ? 'Canvas locked. Unlock to pan and zoom.' : 'Canvas unlocked. Drag empty space to pan and use mouse wheel to zoom.');
+  updateCanvasLockButton();
+  updateStatus();
+}
 function setHelpMode(on){
   S.helpMode=!!on;
   if(S.helpMode) setMsg('Help mode enabled. Hover controls and check Help panel.');
@@ -245,6 +256,8 @@ function applyHelpTips(){
       'Copy SVG':'Copy current SVG markup to your clipboard.',
       'Export PNG':'Render and export a 1200×1200 PNG image.',
       'Reset View':'Reset zoom and pan to the default view.',
+      'Canvas: Locked':'Canvas movement and zoom are locked to prevent accidental view changes.',
+      'Canvas: Unlocked':'Canvas movement and zoom are enabled. Drag empty area to pan and use wheel to zoom.',
       'Edit':'Work with guides, reference image, and editable layers.',
       'Final Preview':'Preview final icon output with editing aids hidden.',
       'Inverse':'Preview icon in white on a dark background.',
@@ -416,7 +429,11 @@ function renderAll(){
   renderGuides(); renderRef(); renderShapes(); renderSelection(); renderInspector(); renderLayers(); renderWarnings(); renderComplexity(); applyModes(); applyHelpTips(); updateStatus();
 }
 
-const zoom=d3.zoom().scaleExtent([0.5,20]).on('zoom',ev=>{root.attr('transform',ev.transform); S.view={k:ev.transform.k,x:ev.transform.x,y:ev.transform.y};});
+const zoom=d3.zoom()
+  .scaleExtent([0.5,20])
+  .filter((ev)=>!S.canvasLocked && (!ev.button || ev.type==='wheel'))
+  .wheelDelta((ev)=>-ev.deltaY*0.0012)
+  .on('zoom',ev=>{root.attr('transform',ev.transform); S.view={k:ev.transform.k,x:ev.transform.x,y:ev.transform.y};});
 svg.call(zoom).on('dblclick.zoom',null);
 
 function startDraw(ev){if(S.tool==='select') return; if(layerLocked('final')) return;
@@ -497,6 +514,7 @@ function bindUI(){
   d3.select('#copySvgBtn').on('click',copySVG);
   d3.select('#exportPngBtn').on('click',exportPNG);
   d3.select('#resetViewBtn').on('click',()=>{S.view={k:1,x:0,y:0};renderAll();});
+  d3.select('#canvasLockBtn').on('click',()=>setCanvasLocked(!S.canvasLocked));
   d3.select('#helpModeBtn').on('click',()=>setHelpMode(!S.helpMode));
 
   [['#modeEdit','edit'],['#modeFinal','final'],['#modeInverse','inverse'],['#modeSmall','small'],['#modeSil','silhouette']].forEach(([id,m])=>d3.select(id).on('click',()=>{S.mode=m;renderAll();}));
@@ -535,9 +553,9 @@ function loadReference(ev){const f=ev.target.files[0]; if(!f)return; const r=new
 function updateRefFields(){['show','lock','aspect'].forEach(()=>{}); d3.select('#refShow').property('checked',S.ref.show); d3.select('#refLock').property('checked',S.ref.lock); d3.select('#refAspect').property('checked',S.ref.keepAspect);
   d3.select('#refOpacity').property('value',S.ref.opacity); d3.select('#refX').property('value',S.ref.x);d3.select('#refY').property('value',S.ref.y);d3.select('#refW').property('value',S.ref.w);d3.select('#refH').property('value',S.ref.h);d3.select('#refScale').property('value',S.ref.scale);d3.select('#refRot').property('value',S.ref.rot);
 }
-function projectData(){return {version:1,constants:C,guides:S.guides,snap:S.snap,view:S.view,layers:S.layers,ref:S.ref,shapes:S.shapes,mode:S.mode};}
+function projectData(){return {version:1,constants:C,guides:S.guides,snap:S.snap,view:S.view,layers:S.layers,ref:S.ref,shapes:S.shapes,mode:S.mode,canvasLocked:S.canvasLocked};}
 function saveJSON(){const b=new Blob([JSON.stringify(projectData(),null,2)],{type:'application/json'}); dl(URL.createObjectURL(b),'pictogram-project.json');}
-function loadJSON(ev){const f=ev.target.files[0]; if(!f)return; const fr=new FileReader(); fr.onload=()=>{try{const j=JSON.parse(fr.result); Object.assign(S,{guides:j.guides||S.guides,snap:j.snap??S.snap,view:j.view||S.view,layers:j.layers||S.layers,ref:j.ref||S.ref,shapes:j.shapes||[],mode:j.mode||'edit',sel:[]}); renderAll();}catch(e){alert('Invalid JSON');}}; fr.readAsText(f);}
+function loadJSON(ev){const f=ev.target.files[0]; if(!f)return; const fr=new FileReader(); fr.onload=()=>{try{const j=JSON.parse(fr.result); Object.assign(S,{guides:j.guides||S.guides,snap:j.snap??S.snap,view:j.view||S.view,layers:j.layers||S.layers,ref:j.ref||S.ref,shapes:j.shapes||[],mode:j.mode||'edit',canvasLocked:j.canvasLocked??true,sel:[]}); updateCanvasLockButton(); renderAll();}catch(e){alert('Invalid JSON');}}; fr.readAsText(f);}
 function exportSVG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); const b=new Blob([str],{type:'image/svg+xml'}); dl(URL.createObjectURL(b),'pictogram.svg');}
 async function copySVG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); try{await navigator.clipboard.writeText(str); setMsg('SVG copied to clipboard');}catch{setMsg('Clipboard unavailable');} updateStatus();}
 function exportPNG(){const c=svg.node().cloneNode(true); c.querySelector('#overlayLayer')?.remove(); const str=new XMLSerializer().serializeToString(c); const img=new Image(); const blob=new Blob([str],{type:'image/svg+xml'}); const url=URL.createObjectURL(blob); img.onload=()=>{const can=document.createElement('canvas'); can.width=1200;can.height=1200; const ctx=can.getContext('2d'); ctx.fillStyle=S.mode==='inverse'?'#111':'#fff'; ctx.fillRect(0,0,1200,1200); ctx.drawImage(img,0,0,1200,1200); can.toBlob(b=>dl(URL.createObjectURL(b),'pictogram.png'),'image/png'); URL.revokeObjectURL(url);}; img.src=url;}
@@ -554,7 +572,7 @@ function applyModes(){
   if(S.mode==='small') svg.classed('small-preview',true); else svg.classed('small-preview',false);
 }
 
-bindUI(); setTool('select'); updateRefFields(); updateHelpButton(); renderAll();
+bindUI(); setTool('select'); updateRefFields(); updateHelpButton(); updateCanvasLockButton(); renderAll();
 })();
 </script>
 </body>
